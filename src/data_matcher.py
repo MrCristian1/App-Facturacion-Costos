@@ -180,8 +180,9 @@ class DataMatcher:
             # Si la similitud supera el umbral, considerarlo un match
             if best_match and best_similarity >= min_similarity:
                 matched_emp = {
-                    'nombre_excel': best_match.get('nombre', ''),  # SOLO nombre del Excel
-                    'cedula': best_match.get('cedula', ''),      # SOLO cédula del Excel
+                    'nombre_pdf': pdf_emp.get('nombre', ''),     # Nombre del PDF
+                    'nombre_excel': best_match.get('nombre', ''),  # Nombre del Excel
+                    'cedula': pdf_emp.get('cedula', '') or best_match.get('cedula', ''),  # Priorizar cédula PDF, luego Excel
                     'centro_costo': best_match.get('centro_costo', ''),
                     'match_method': 'nombre',
                     'confidence': best_similarity
@@ -434,7 +435,7 @@ class DataMatcher:
                         'nombre_excel': sugg['excel_employee']['nombre'],
                         'cedula_excel': sugg['excel_employee'].get('cedula', ''),
                         'centro_costo': sugg['excel_employee'].get('centro_costo', ''),
-                        'similitud': f"{sugg['similarity']:.2f}"
+                        'similitud': f"{sugg['similarity']:.0%}"
                     }
                     for sugg in top_suggestions
                 ]

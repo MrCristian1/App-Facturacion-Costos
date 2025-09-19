@@ -370,8 +370,19 @@ class ProgressWindow:
         
     def close(self):
         """Cierra la ventana de progreso."""
-        self.progress_bar.stop()
-        self.window.destroy()
+        try:
+            if hasattr(self, 'progress_bar') and self.progress_bar.winfo_exists():
+                self.progress_bar.stop()
+        except tk.TclError:
+            # Widget ya destruido, no hay problema
+            pass
+        finally:
+            try:
+                if hasattr(self, 'window') and self.window.winfo_exists():
+                    self.window.destroy()
+            except tk.TclError:
+                # Ventana ya destruida, no hay problema
+                pass
 
 
 class ResultsWindow:
@@ -382,9 +393,14 @@ class ResultsWindow:
         """Inicializa la ventana de resultados con estilo moderno."""
         self.window = tk.Toplevel(parent)
         self.window.title("Resultados del Procesamiento")
-        self.window.geometry("1150x750")  # Ventana aún más grande para evitar recortes
+        self.window.geometry("1000x680")  # Aumentado altura para acomodar footer mejor
+        self.window.resizable(False, False)  # No permitir redimensionar
         self.window.transient(parent)
         self.window.configure(bg=ModernStyle.COLORS['background'])
+        
+        # Centrar la ventana
+        self.center_window()
+        
         # Establecer el ícono personalizado
         ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'syp.ico')
         try:
@@ -395,6 +411,15 @@ class ResultsWindow:
         self.results = results
         ModernStyle.configure_styles(self.window)
         self.setup_widgets()
+        
+    def center_window(self):
+        """Centra la ventana de resultados en la pantalla."""
+        self.window.update_idletasks()
+        width = 1000
+        height = 680  # Aumentado para acomodar footer
+        x = (self.window.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.window.winfo_screenheight() // 2) - (height // 2)
+        self.window.geometry(f"{width}x{height}+{x}+{y}")
         
     def setup_widgets(self):
         """Configura los widgets con estilo moderno."""
@@ -428,7 +453,7 @@ class ResultsWindow:
         header_frame = tk.Frame(
             self.window, 
             bg=ModernStyle.COLORS['primary'], 
-            height=120
+            height=90  # Reducido de 120 a 90
         )
         header_frame.pack(fill=tk.X)
         header_frame.pack_propagate(False)
@@ -441,7 +466,7 @@ class ResultsWindow:
         title_label = tk.Label(
             content_frame,
             text="🎯 Resultados del Procesamiento",
-            font=('Segoe UI', 18, 'bold'),
+            font=('Segoe UI', 20, 'bold'),  # Reducido de 18 a 16
             bg=ModernStyle.COLORS['primary'],
             fg='white'
         )
@@ -631,10 +656,14 @@ El sistema ha analizado todos los empleados del PDF de facturación y los ha com
         tree.column("Confianza", width=100)
 
         # Agregar datos
-        for emp in self.results.get('matched_employees', []):
-            nombre_excel = emp.get('nombre_excel', '')
+        print(f"🔍 DEBUG: Datos de empleados encontrados:")
+        print(f"Total matched_employees: {len(self.results.get('matched_employees', []))}")
+        for i, emp in enumerate(self.results.get('matched_employees', [])):
+            print(f"  Empleado {i+1}: {emp}")
+            # Usar nombre_excel o nombre_pdf dependiendo de lo que esté disponible
+            nombre_mostrar = emp.get('nombre_excel', '') or emp.get('nombre_pdf', '') or emp.get('nombre', '')
             tree.insert('', tk.END, values=(
-                nombre_excel,
+                nombre_mostrar,
                 emp.get('cedula', ''),
                 emp.get('centro_costo', ''),
                 emp.get('match_method', ''),
@@ -767,7 +796,7 @@ El sistema ha analizado todos los empleados del PDF de facturación y los ha com
                 text_widget.insert(tk.END, f"   {i}. 👤 {match['nombre_excel']}\n")
                 text_widget.insert(tk.END, f"      🆔 Cédula: {match['cedula_excel']}\n")
                 text_widget.insert(tk.END, f"      🏢 Centro: {match['centro_costo']}\n")
-                text_widget.insert(tk.END, f"      📊 Similitud: {match['similitud']:.0%}\n\n")
+                text_widget.insert(tk.END, f"      📊 Similitud: {match['similitud']}\n\n")
             
             text_widget.insert(tk.END, "\n" + "═"*60 + "\n\n")
         
@@ -775,9 +804,9 @@ El sistema ha analizado todos los empleados del PDF de facturación y los ha com
         
     def create_footer(self, parent):
         """Crea el footer con botones de acción."""
-        # Contenedor del footer con más espacio
-        footer_frame = tk.Frame(parent, bg=ModernStyle.COLORS['background'], height=80)
-        footer_frame.pack(fill=tk.X, pady=(30, 20))
+        # Contenedor del footer con altura suficiente para los botones
+        footer_frame = tk.Frame(parent, bg=ModernStyle.COLORS['background'], height=80)  # Aumentado a 80
+        footer_frame.pack(fill=tk.X, pady=(15, 20))  # Padding ajustado
         footer_frame.pack_propagate(False)  # Mantener altura fija
         
         # Container para centrar los botones con padding adecuado
@@ -791,7 +820,7 @@ El sistema ha analizado todos los empleados del PDF de facturación y los ha com
             command=self.window.destroy,
             style='Primary.TButton'
         )
-        close_button.pack(side=tk.LEFT, padx=(0, 15), pady=10)
+        close_button.pack(side=tk.LEFT, padx=(0, 15), pady=5)  # Reducido padding vertical
         
         # Botón abrir carpeta
         open_folder_button = ttk.Button(
@@ -800,7 +829,7 @@ El sistema ha analizado todos los empleados del PDF de facturación y los ha com
             command=self.open_output_folder,
             style='Secondary.TButton'
         )
-        open_folder_button.pack(side=tk.LEFT, pady=10)
+        open_folder_button.pack(side=tk.LEFT, pady=5)  # Reducido padding vertical
         
     def open_output_folder(self):
         """Abre la carpeta de salida que el usuario escogió."""
@@ -1624,7 +1653,10 @@ class MainApplication:
                 progress_window.add_detail("Aplicando algoritmos de coincidencia")
                 
                 matcher = DataMatcher(pdf_extractor, excel_processor)
-                matching_results = matcher.perform_full_matching(0.7)  # Usar valor fijo de 0.7
+                # Realizar el matching completo
+                matcher.perform_full_matching(0.7)  # Usar valor fijo de 0.7
+                # Obtener los resultados en el formato correcto
+                matching_results = matcher.export_results_to_dict()
                 
                 progress_window.add_detail(f"Matching completado:")
                 progress_window.add_detail(f"  ✅ Encontrados: {matching_results['statistics']['total_matched']}")
@@ -1651,14 +1683,20 @@ class MainApplication:
                 # Esperar un momento para mostrar éxito
                 threading.Event().wait(1)
                 
-                # Cerrar ventana de progreso
-                progress_window.close()
+                # Cerrar ventana de progreso de forma segura
+                try:
+                    progress_window.close()
+                except Exception as e:
+                    print(f"Error al cerrar ventana de progreso: {e}")
                 
                 # Mostrar resultados
                 self.show_results(matching_results, final_pdf_path)
                 
             except Exception as e:
-                progress_window.close()
+                try:
+                    progress_window.close()
+                except:
+                    pass
                 self.show_modern_error("Error de Procesamiento", f"Ocurrió un error durante el procesamiento:\n\n{str(e)}")
                 
         except Exception as e:
