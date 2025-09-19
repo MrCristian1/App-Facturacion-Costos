@@ -45,7 +45,7 @@ class PDFExtractor:
     def extract_employee_names(self) -> List[str]:
         """
         Extrae nombres de empleados del texto del PDF.
-        Busca patrones comunes de nombres (2-3 palabras capitalizadas).
+        Busca nombres después de "Nombre del afiliado" y alrededor de "Cédula".
         
         Returns:
             Lista de nombres de empleados encontrados
@@ -53,26 +53,61 @@ class PDFExtractor:
         if not self.text_content:
             self.extract_text()
         
-        # Patrón para nombres: 2-3 palabras que empiecen con mayúscula
-        name_pattern = r'\b[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){1,2}\b'
+        names = []
         
-        names = re.findall(name_pattern, self.text_content)
+        # Patrón 1: Buscar después de "Nombre del afiliado"
+        pattern1 = r'Nombre\s+del\s+afiliado[:\s]*([A-ZÁÉÍÓÚÑ][A-Za-záéíóúñ\s]+?)(?=\n|Cédula|C\.C|Documento|$)'
+        matches1 = re.findall(pattern1, self.text_content, re.IGNORECASE)
         
-        # Filtrar nombres muy comunes que probablemente no sean empleados
+        for match in matches1:
+            clean_name = match.strip()
+            if len(clean_name) > 3:  # Nombre mínimo
+                names.append(clean_name)
+        
+        # Patrón 2: Buscar a la izquierda de "Cédula"
+        # Formato: "NOMBRE APELLIDO    Cédula    1234567"
+        pattern2 = r'([A-ZÁÉÍÓÚÑ][A-Za-záéíóúñ\s]+?)\s+Cédula\s+(\d+)'
+        matches2 = re.findall(pattern2, self.text_content, re.IGNORECASE)
+        
+        for match in matches2:
+            clean_name = match[0].strip()
+            if len(clean_name) > 3:  # Nombre mínimo
+                names.append(clean_name)
+        
+        # Patrón 3: Buscar nombres con formato más general cerca de cédulas
+        lines = self.text_content.split('\n')
+        for i, line in enumerate(lines):
+            if re.search(r'cédula|cedula|c\.c|documento', line, re.IGNORECASE):
+                # Buscar en la línea anterior
+                if i > 0:
+                    prev_line = lines[i-1].strip()
+                    name_match = re.search(r'^([A-ZÁÉÍÓÚÑ][A-Za-záéíóúñ\s]+?)$', prev_line)
+                    if name_match and len(name_match.group(1)) > 3:
+                        names.append(name_match.group(1).strip())
+                
+                # Buscar en la misma línea (antes de cédula)
+                name_in_line = re.search(r'^([A-ZÁÉÍÓÚÑ][A-Za-záéíóúñ\s]+?)\s+(?:cédula|cedula|c\.c)', line, re.IGNORECASE)
+                if name_in_line and len(name_in_line.group(1)) > 3:
+                    names.append(name_in_line.group(1).strip())
+        
+        # Limpiar y filtrar nombres
+        filtered_names = []
         excluded_words = {'Factura', 'Empresa', 'Cliente', 'Total', 'Fecha', 'Número', 
                          'Descripción', 'Cantidad', 'Precio', 'Valor', 'Descuento',
-                         'Impuesto', 'Base', 'Tarifa', 'Código', 'Producto', 'Servicio'}
+                         'Impuesto', 'Base', 'Tarifa', 'Código', 'Producto', 'Servicio',
+                         'Nombre', 'Afiliado', 'Del', 'Cédula', 'Documento'}
         
-        filtered_names = []
         for name in names:
             # Verificar que no sea una palabra excluida
-            if not any(word in name for word in excluded_words):
-                # Verificar que tenga al menos 2 palabras
-                if len(name.split()) >= 2:
+            if not any(word.upper() in name.upper() for word in excluded_words):
+                # Verificar que tenga al menos 2 palabras o sea un nombre compuesto
+                if len(name.split()) >= 2 or len(name) > 10:
                     filtered_names.append(name.strip())
         
         # Eliminar duplicados manteniendo el orden
         unique_names = list(dict.fromkeys(filtered_names))
+        
+        return unique_names
         
         return unique_names
     
@@ -122,25 +157,72 @@ class PDFExtractor:
     
     def extract_employees_data(self) -> List[Dict[str, str]]:
         """
-        Extrae SOLO cédulas del PDF - Los nombres vendrán del Excel.
+        Extrae nombres y cédulas del PDF, asociándolos correctamente.
         
         Returns:
-            Lista de diccionarios con cédulas (sin nombres del PDF)
+            Lista de diccionarios con datos de empleados
         """
-        # SOLO extraer cédulas - ignorar nombres del PDF
+        # Extraer nombres y cédulas por separado
+        names = self.extract_employee_names()
         cedulas = self.extract_cedulas()
+        
+        print(f"📄 PDF - Nombres extraídos: {len(names)}")
+        for i, name in enumerate(names[:5], 1):  # Mostrar primeros 5
+            print(f"   {i}. '{name}'")
+        
+        print(f"📄 PDF - Cédulas extraídas: {len(cedulas)}")
+        for i, cedula in enumerate(cedulas[:5], 1):  # Mostrar primeras 5
+            print(f"   {i}. '{cedula}'")
         
         employees = []
         
-        # Crear un empleado por cada cédula encontrada
-        for cedula in cedulas:
-            employees.append({
-                'nombre': '',  # Siempre vacío - vendrá del Excel
-                'cedula': cedula,
-                'centro_costo': ''  # Se llenará desde el Excel
-            })
+        # Intentar asociar nombres y cédulas
+        if len(names) == len(cedulas):
+            # Si hay igual cantidad, asociar por posición
+            print("✅ Asociando nombres y cédulas por posición (cantidades iguales)")
+            for i, name in enumerate(names):
+                employees.append({
+                    'nombre': name,
+                    'cedula': cedulas[i],
+                    'centro_costo': ''  # Se llenará desde el Excel
+                })
+        else:
+            # Si no coinciden las cantidades, intentar asociación por proximidad en el texto
+            print("🔍 Asociando nombres y cédulas por proximidad en el texto")
+            
+            # Buscar asociaciones directas en el texto
+            text_lines = self.text_content.split('\n')
+            used_names = set()
+            used_cedulas = set()
+            
+            for line in text_lines:
+                # Buscar líneas que contengan tanto un nombre como una cédula
+                for name in names:
+                    for cedula in cedulas:
+                        if name in line and cedula in line and name not in used_names and cedula not in used_cedulas:
+                            employees.append({
+                                'nombre': name,
+                                'cedula': cedula,
+                                'centro_costo': ''
+                            })
+                            used_names.add(name)
+                            used_cedulas.add(cedula)
+                            print(f"   ✅ Asociado: '{name}' -> {cedula}")
+                            break
+            
+            # Agregar cédulas restantes sin nombre
+            for cedula in cedulas:
+                if cedula not in used_cedulas:
+                    employees.append({
+                        'nombre': '',  # Sin nombre, se obtendrá del Excel si es posible
+                        'cedula': cedula,
+                        'centro_costo': ''
+                    })
+                    print(f"   ⚠️  Cédula sin nombre asociado: {cedula}")
         
         self.employees_data = employees
+        print(f"📋 Total empleados procesados: {len(employees)}")
+        
         return employees
     
     def get_text_preview(self, max_chars: int = 500) -> str:

@@ -223,14 +223,16 @@ class PDFGenerator:
         story.append(Spacer(1, 20))
         
         # Estadísticas
-        if statistics:
-            stats_title = Paragraph("Estadísticas del Procesamiento", self.custom_styles['subtitle'])
-            story.append(stats_title)
-            story.append(Spacer(1, 10))
-            
-            stats_table = self.create_statistics_table(statistics)
-            story.append(stats_table)
-            story.append(Spacer(1, 30))
+
+        # --- Sección de estadísticas comentada para no mostrar en el PDF ---
+        # if statistics:
+        #     stats_title = Paragraph("Estadísticas del Procesamiento", self.custom_styles['subtitle'])
+        #     story.append(stats_title)
+        #     story.append(Spacer(1, 10))
+        #     
+        #     stats_table = self.create_statistics_table(statistics)
+        #     story.append(stats_table)
+        #     story.append(Spacer(1, 30))
         
         # Tabla principal de datos (solo empleados encontrados)
         if consolidated_data:
@@ -243,14 +245,15 @@ class PDFGenerator:
             story.append(data_table)
             
             # Información adicional si hay empleados no encontrados
-            if statistics and statistics.get('total_unmatched', 0) > 0:
-                story.append(Spacer(1, 20))
-                unmatched_note = Paragraph(
-                    f"<b>Nota:</b> {statistics['total_unmatched']} empleados no fueron encontrados en la base de datos. "
-                    "Consulte el reporte detallado para ver sugerencias de matching manual.",
-                    self.custom_styles['normal']
-                )
-                story.append(unmatched_note)
+            # --- Sección de nota de empleados no encontrados comentada ---
+            # if statistics and statistics.get('total_unmatched', 0) > 0:
+            #     story.append(Spacer(1, 20))
+            #     unmatched_note = Paragraph(
+            #         f"<b>Nota:</b> {statistics['total_unmatched']} empleados no fueron encontrados en la base de datos. "
+            #         "Consulte el reporte detallado para ver sugerencias de matching manual.",
+            #         self.custom_styles['normal']
+            #     )
+            #     story.append(unmatched_note)
         else:
             # Si no hay empleados encontrados
             data_title = Paragraph("Resultados del Procesamiento", self.custom_styles['subtitle'])
@@ -266,18 +269,19 @@ class PDFGenerator:
             story.append(no_data_para)
         
         # Notas adicionales
-        story.append(Spacer(1, 30))
-        notes_title = Paragraph("Notas", self.custom_styles['subtitle'])
-        story.append(notes_title)
-        
-        notes_text = """
-        • <b>Estado 'Encontrado (cedula)':</b> Empleado encontrado por coincidencia exacta de cédula<br/>
-        • <b>Estado 'Encontrado (nombre)':</b> Empleado encontrado por similitud de nombre<br/>
-        • <b>Estado 'No encontrado':</b> Empleado no pudo ser identificado en la base de datos<br/>
-        • <b>Confianza:</b> Nivel de certeza del matching (1.00 = coincidencia exacta, 0.70+ = muy probable)
-        """
-        notes_para = Paragraph(notes_text, self.custom_styles['normal'])
-        story.append(notes_para)
+    # --- Sección de notas comentada ---
+    # story.append(Spacer(1, 30))
+    # notes_title = Paragraph("Notas", self.custom_styles['subtitle'])
+    # story.append(notes_title)
+    # 
+    # notes_text = """
+    # • <b>Estado 'Encontrado (cedula)':</b> Empleado encontrado por coincidencia exacta de cédula<br/>
+    # • <b>Estado 'Encontrado (nombre)':</b> Empleado encontrado por similitud de nombre<br/>
+    # • <b>Estado 'No encontrado':</b> Empleado no pudo ser identificado en la base de datos<br/>
+    # • <b>Confianza:</b> Nivel de certeza del matching (1.00 = coincidencia exacta, 0.70+ = muy probable)
+    # """
+    # notes_para = Paragraph(notes_text, self.custom_styles['normal'])
+    # story.append(notes_para)
         
         # Construir documento
         doc.build(story)

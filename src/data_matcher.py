@@ -124,7 +124,8 @@ class DataMatcher:
                     # Tomar el primer resultado (debería ser único por cédula)
                     excel_emp = excel_results[0]
                     matched_emp = {
-                        'nombre_excel': excel_emp.get('nombre', ''),  # SOLO nombre del Excel
+                        'nombre_pdf': pdf_emp.get('nombre', ''),     # Nombre del PDF (bien formateado)
+                        'nombre_excel': excel_emp.get('nombre', ''), # Nombre del Excel (sin espacios)
                         'cedula': pdf_emp['cedula'],
                         'centro_costo': excel_emp.get('centro_costo', ''),
                         'match_method': 'cedula',
@@ -357,8 +358,7 @@ class DataMatcher:
     def get_consolidated_data(self) -> List[Dict[str, str]]:
         """
         Obtiene los datos consolidados para generar la tabla final.
-        Solo incluye empleados encontrados (matcheados).
-        SOLO USA NOMBRES DEL EXCEL - IGNORA COMPLETAMENTE NOMBRES DEL PDF.
+        PRIORIDAD: Nombre del PDF (bien formateado) > Nombre del Excel (sin espacios)
         
         Returns:
             Lista de empleados con datos consolidados (solo encontrados)
@@ -367,12 +367,22 @@ class DataMatcher:
         
         # Solo agregar empleados matcheados (encontrados)
         for emp in self.matched_employees:
-            # SOLO usar el nombre del Excel - ignorar completamente el PDF
-            nombre_excel = emp.get('nombre_excel', '')
-            nombre_formateado = self.format_name(nombre_excel) if nombre_excel else ''
+            # PRIORIDAD: Usar nombre del PDF si está disponible (viene bien formateado)
+            # Si no, usar nombre del Excel como respaldo
+            nombre_a_usar = ""
+            
+            if emp.get('nombre_pdf') and emp.get('nombre_pdf').strip():
+                nombre_a_usar = emp.get('nombre_pdf')
+                print(f"✅ Usando nombre del PDF: '{nombre_a_usar}'")
+            elif emp.get('nombre_excel') and emp.get('nombre_excel').strip():
+                nombre_a_usar = emp.get('nombre_excel')
+                print(f"⚠️  Usando nombre del Excel: '{nombre_a_usar}'")
+            
+            # Formatear el nombre si es necesario
+            nombre_formateado = self.format_name(nombre_a_usar) if nombre_a_usar else ''
             
             consolidated_emp = {
-                'nombre': nombre_formateado,  # SOLO del Excel
+                'nombre': nombre_formateado,
                 'cedula': emp.get('cedula', ''),
                 'centro_costo': emp.get('centro_costo', ''),
                 'estado_match': f"Encontrado ({emp.get('match_method', 'unknown')})",
